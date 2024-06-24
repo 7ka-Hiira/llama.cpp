@@ -38,7 +38,12 @@ cSettings.append(
 #endif
 
 #if os(Linux)
-    cSettings.append(.define("_GNU_SOURCE"))
+    sources.append("ggml-vulkan.cpp")
+    linkerSettings.append(.linkedLibrary("vulkan"))
+    cSettings.append(contentsOf: [
+        .define("_GNU_SOURCE"),
+        .define("GGML_USE_VULKAN"),
+    ])
 #endif
 
 let package = Package(
