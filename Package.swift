@@ -24,6 +24,7 @@ var cSettings: [CSetting] =  [
     // .define("ACCELERATE_NEW_LAPACK"),
     // .define("ACCELERATE_LAPACK_ILP64")
 ]
+var cxxVersion: CXXLanguageStandard = .cxx11
 
 #if canImport(Darwin)
 sources.append("ggml-metal.m")
@@ -44,6 +45,7 @@ cSettings.append(
 #if os(Windows)
     cSettings.append(.unsafeFlags(["-Xclang", "-fno-split-cold-code"]))
     cSettings.append(.unsafeFlags(["-Wdeprecated-declarations"]))
+    cxxVersion = .cxx14
 #endif
 
 let package = Package(
@@ -79,5 +81,5 @@ let package = Package(
             linkerSettings: linkerSettings
         )
     ],
-    cxxLanguageStandard: .cxx14
+    cxxLanguageStandard: cxxVersion
 )
