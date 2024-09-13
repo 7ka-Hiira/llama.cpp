@@ -12390,7 +12390,7 @@ struct llm_tokenizer_bpe {
                 const auto token = vocab.token_to_id.find(str);
                 // U+000A -> Ċ -> [UNK] (line feed, use [SEP] instead)
                 // U+0020 -> Ġ -> [UNK] (space, use U+3000 instead)
-                if (str == "Ċ" || str == "Ġ") {
+                if (str == "\u010A" || str == "\u0120") {
                     output.push_back(vocab.token_to_id.at("[UNK]"));
                 } else if (token == vocab.token_to_id.end()) {
                     for (auto j = str.begin(); j != str.end(); ++j) {
