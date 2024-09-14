@@ -45,8 +45,6 @@ cSettings.append(
     // Workaround of https://github.com/llvm/llvm-project/issues/40056
     cSettings.append(.unsafeFlags(["-Xclang", "-fno-split-cold-code"]))
     cSettings.append(.unsafeFlags(["-Wdeprecated-declarations"]))
-
-    cSettings.append(.define("GGML_USE_CUDA"))
 #endif
 
 let package = Package(
@@ -71,6 +69,8 @@ let package = Package(
                "models",
                "tests",
                "CMakeLists.txt",
+               "ggml-cuda.cu",
+               "ggml-cuda.h",
                "Makefile"
             ],
             sources: sources,
