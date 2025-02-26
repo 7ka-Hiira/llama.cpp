@@ -1255,6 +1255,9 @@ class TextModel(ModelBase):
         if chkhsh == "6c81ce329e0802883b22eabab0d3fa48357337ef1ecb45443828bf1f6254833f":
             # ref: https://huggingface.co/LGAI-EXAONE/K-EXAONE-236B-A23B
             res = "exaone-moe"
+        if chkhsh == "acded0362f57dcca1fbdada8d4c87dd782c798cb4c510a70f12a9de6aea57857":
+            # ref: https://huggingface.co/ku-nlp/gpt2-small-japanese-char
+            res = "gpt2-small-japanese-char"
 
         if res is None:
             logger.warning("\n")
