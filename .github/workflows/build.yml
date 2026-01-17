@@ -1,103 +1,183 @@
 name: CI
 
 on:
-  workflow_dispatch: # allows manual triggering
+    workflow_dispatch: # allows manual triggering
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
-  cancel-in-progress: true
+    group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+    cancel-in-progress: true
 
 env:
-  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-  GGML_NLOOP: 3
-  GGML_N_THREADS: 1
+    BRANCH_NAME: ${{ github. head_ref || github.ref_name }}
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - name: "x86_64-cpu"
-            runner: ubuntu-22.04
-            arch: x86_64
-            backend: cpu
-            vulkan: "OFF"
-          - name: "x86_64-vulkan"
-            runner: ubuntu-22.04
-            arch: x86_64
-            backend: vulkan
-            vulkan: "ON"
-          - name: "aarch64-cpu"
-            runner: ubuntu-24.04-arm
-            arch: aarch64
-            backend: cpu
-            vulkan: "OFF"
-          - name: "aarch64-vulkan"
-            runner: ubuntu-24.04-arm
-            arch: aarch64
-            backend: vulkan
-            vulkan: "ON"
+    build:
+        strategy:
+            matrix:
+                include:
+                    - name: "x86_64-glibc"
+                      runner: ubuntu-22.04
+                      arch: x86_64
+                    - name: "aarch64-glibc"
+                      runner: ubuntu-24.04-arm
+                      arch: aarch64
 
-    runs-on: ${{ matrix.runner }}
-    name: Build ${{ matrix.name }}
+        runs-on: ${{ matrix.runner }}
+        name: Build ${{ matrix.name }}
 
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        steps:
+            - name: Clone
+              id: checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-      - name: Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install build-essential cmake
+            - name: Dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install build-essential cmake
 
-      - name: Vulkan Dependencies (Ubuntu 24.04 or later)
-        if: matrix.runner != 'ubuntu-22.04' && matrix.runner != 'ubuntu-22.04-arm' && matrix.vulkan == 'ON'
-        run: |
-          sudo apt-get install -y libvulkan-dev glslc
-      
-      - name: Vulkan Dependencies (Ubuntu 22.04 x86_64)
-        if: matrix.runner == 'ubuntu-22.04' && matrix.vulkan == 'ON'
-        run: |
-          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
-          sudo apt-get update -y
-          sudo apt-get install -y mesa-vulkan-drivers vulkan-sdk
+            - name: Vulkan Dependencies (Ubuntu 24.04 or later)
+              if: matrix.runner != 'ubuntu-22.04'
+              run: |
+                  sudo apt-get install -y libvulkan-dev glslc
 
-      - name: Build
-        id: make_build
-        run: |
-          cmake -B build \
-            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-            -DCMAKE_SKIP_BUILD_RPATH=ON \
-            -DBUILD_SHARED_LIBS=ON \
-            -DLLAMA_CURL=OFF \
-            -DLLAMA_STANDALONE=OFF \
-            -DLLAMA_BUILD_TESTS=OFF \
-            -DLLAMA_BUILD_EXAMPLES=OFF \
-            -DLLAMA_BUILD_SERVER=OFF \
-            -DLLAMA_ALL_WARNINGS=OFF \
-            -DLLAMA_FATAL_WARNINGS=OFF \
-            -DLLAMA_LLGUIDANCE=OFF \
-            -DGGML_RPC=OFF \
-            -DGGML_SCHED_MAX_COPIES=2 \
-            -DGGML_LTO=ON \
-            -DGGML_VULKAN=${{ matrix.vulkan }}
-          cmake --build build --config Release -j $(nproc)
+            - name: Vulkan Dependencies (Ubuntu 22.04 x86_64)
+              if: matrix.runner == 'ubuntu-22.04'
+              run: |
+                  wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+                  sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+                  sudo apt-get update -y
+                  sudo apt-get install -y mesa-vulkan-drivers vulkan-sdk
 
-      - name: Collect build artifacts
-        id: collect_artifacts
-        run: |
-          set -e
-          mkdir -p artifact/build
-          cp build/bin/*.so artifact/build/ || true
+            - name: Build
+              id: make_build
+              run: |
+                  cmake -B build \
+                    -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+                    -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+                    -DCMAKE_SKIP_BUILD_RPATH=ON \
+                    -DBUILD_SHARED_LIBS=ON \
+                    -DLLAMA_CURL=OFF \
+                    -DLLAMA_STANDALONE=OFF \
+                    -DGGML_BACKEND_DL=ON \
+                    -DGGML_BACKEND_DIR='backends' \
+                    -DGGML_CPU_ALL_VARIANTS=ON \
+                    -DGGML_CPU=ON \
+                    -DGGML_VULKAN=ON \
+                    -DGGML_LTO=ON
+                  cmake --build build --config Release -j $(nproc)
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-${{ matrix.name }}-${{ github.run_id }}
-          path: artifact/build
+            - name: Collect build artifacts
+              id: collect_artifacts
+              run: |
+                  set -e
+                  mkdir -p artifact/build
+                  cp build/bin/*.so artifact/build/ || true
+
+            - name: Upload build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: build-${{ matrix.name }}-${{ github.run_id }}
+                  path: artifact/build
+
+    build-musl:
+        strategy:
+            matrix:
+                include:
+                    - name: "x86_64-musl"
+                      runner: ubuntu-22.04
+                      arch: x86_64
+                      container: alpine:latest
+
+        runs-on: ${{ matrix.runner }}
+        container: ${{ matrix.container }}
+        name: Build ${{ matrix.name }}
+
+        steps:
+            - name: Clone
+              id: checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Dependencies
+              run: |
+                  apk update
+                  apk add --no-cache build-base cmake git vulkan-headers shaderc-dev
+
+            - name: Build
+              id: make_build
+              run: |
+                  cmake -B build \
+                    -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+                    -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+                    -DCMAKE_SKIP_BUILD_RPATH=ON \
+                    -DBUILD_SHARED_LIBS=ON \
+                    -DLLAMA_CURL=OFF \
+                    -DLLAMA_STANDALONE=OFF \
+                    -DGGML_BACKEND_DL=ON \
+                    -DGGML_BACKEND_DIR='backends' \
+                    -DGGML_CPU_ALL_VARIANTS=ON \
+                    -DGGML_CPU=ON \
+                    -DGGML_VULKAN=OFF \
+                    -DGGML_LTO=ON
+                  cmake --build build --config Release -j $(nproc)
+
+            - name: Collect build artifacts
+              id: collect_artifacts
+              run: |
+                  set -e
+                  mkdir -p artifact/build
+                  cp build/bin/*. so artifact/build/ || true
+
+            - name: Upload build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: build-${{ matrix.name }}-${{ github.run_id }}
+                  path: artifact/build
+
+    build-freebsd:
+        runs-on: ubuntu-22.04
+        name: Build FreeBSD x86_64
+
+        steps:
+            - name: Clone
+              id: checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Build on FreeBSD
+              id: freebsd_build
+              uses: cross-platform-actions/action@v0.25.0
+              with:
+                  operating_system: freebsd
+                  version: "14.1"
+                  run: |
+                      sudo pkg install -y cmake git vulkan-headers vulkan-loader shaderc
+                      cmake -B build \
+                        -DCMAKE_BUILD_TYPE=Release \
+                        -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+                        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+                        -DCMAKE_SKIP_BUILD_RPATH=ON \
+                        -DBUILD_SHARED_LIBS=ON \
+                        -DLLAMA_CURL=OFF \
+                        -DLLAMA_STANDALONE=OFF \
+                        -DGGML_BACKEND_DL=ON \
+                        -DGGML_BACKEND_DIR='backends' \
+                        -DGGML_CPU_ALL_VARIANTS=ON \
+                        -DGGML_CPU=ON \
+                        -DGGML_VULKAN=ON \
+                        -DGGML_LTO=ON
+                      cmake --build build --config Release -j $(sysctl -n hw.ncpu)
+                      mkdir -p artifact/build
+                      cp build/bin/*.so artifact/build/ || true
+
+            - name: Upload build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: build-freebsd-x86_64-${{ github. run_id }}
+                  path: artifact/build
