@@ -161,7 +161,10 @@ endif()
 # Somehow in OpenBSD whenever POSIX conformance is specified
 # some string functions rely on locale_t availability,
 # which was introduced in POSIX.1-2008, forcing us to go higher
-if (CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
+if (
+    CMAKE_SYSTEM_NAME MATCHES "OpenBSD" OR
+    CMAKE_SYSTEM_NAME MATCHES "FreeBSD"
+)
     add_compile_definitions(_XOPEN_SOURCE=700)
 else()
     add_compile_definitions(_XOPEN_SOURCE=600)
