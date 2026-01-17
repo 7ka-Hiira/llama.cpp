@@ -12,6 +12,8 @@ env:
 
 jobs:
     build:
+        env:
+            CUDACXX: /usr/local/cuda-12.4/bin/nvcc
         strategy:
             matrix:
                 include:
@@ -35,7 +37,7 @@ jobs:
             - name: Dependencies
               run: |
                   sudo apt-get update
-                  sudo apt-get install build-essential cmake
+                  sudo apt-get install build-essential cmake wget gnupg2
 
             - name: Vulkan Dependencies (Ubuntu 24.04 or later)
               if: matrix.runner != 'ubuntu-22.04'
@@ -50,6 +52,23 @@ jobs:
                   sudo apt-get update -y
                   sudo apt-get install -y mesa-vulkan-drivers vulkan-sdk
 
+            - name: Install CUDA Toolkit (Ubuntu 22.04 x86_64)
+              if: matrix.runner == 'ubuntu-22.04'
+              run: |
+                  wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+                  sudo dpkg -i cuda-keyring_1.1-1_all.deb
+                  sudo apt-get update
+                  sudo apt-get install -y cuda-nvcc-12-4 cuda-cudart-dev-12-4 libcublas-dev-12-4
+
+            # - name: Install ROCm (x86_64)
+            #   if: matrix.arch == 'x86_64'
+            #   run: |
+            #       sudo mkdir --parents --mode=0755 /etc/apt/keyrings
+            #       wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+            #       echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.0 jammy main" | sudo tee /etc/apt/sources.list.d/rocm.list
+            #       sudo apt-get update
+            #       sudo apt-get install -y hip-runtime-amd hip-dev rocblas-dev
+
             - name: Build
               id: make_build
               run: |
@@ -61,12 +80,13 @@ jobs:
                     -DBUILD_SHARED_LIBS=ON \
                     -DLLAMA_CURL=OFF \
                     -DLLAMA_STANDALONE=OFF \
+                    -DGGML_NATIVE=OFF \
+                    -DGGML_LTO=ON \
                     -DGGML_BACKEND_DL=ON \
-                    -DGGML_BACKEND_DIR='backends' \
-                    -DGGML_CPU_ALL_VARIANTS=ON \
+                    -DGGML_CPU_ALL_VARIANTS=${{ matrix.arch == 'x86_64' && 'ON' || 'OFF' }} \
                     -DGGML_CPU=ON \
                     -DGGML_VULKAN=ON \
-                    -DGGML_LTO=ON
+                    -DGGML_CUDA=${{ matrix.arch == 'x86_64' && 'ON' || 'OFF' }}
                   cmake --build build --config Release -j $(nproc)
 
             - name: Collect build artifacts
@@ -79,7 +99,7 @@ jobs:
             - name: Upload build artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: build-${{ matrix.name }}-${{ github.run_id }}
+                  name: libllama-linux-${{ matrix.name }}-${{ github.run_id }}
                   path: artifact/build
 
     build-musl:
@@ -105,7 +125,7 @@ jobs:
             - name: Dependencies
               run: |
                   apk update
-                  apk add --no-cache build-base cmake git vulkan-headers shaderc-dev
+                  apk add --no-cache build-base cmake git vulkan-headers vulkan-loader-dev shaderc-dev
 
             - name: Build
               id: make_build
@@ -118,12 +138,12 @@ jobs:
                     -DBUILD_SHARED_LIBS=ON \
                     -DLLAMA_CURL=OFF \
                     -DLLAMA_STANDALONE=OFF \
+                    -DGGML_NATIVE=OFF \
+                    -DGGML_LTO=ON \
                     -DGGML_BACKEND_DL=ON \
-                    -DGGML_BACKEND_DIR='backends' \
-                    -DGGML_CPU_ALL_VARIANTS=ON \
+                    -DGGML_CPU_ALL_VARIANTS=${{ matrix.arch == 'x86_64' && 'ON' || 'OFF' }} \
                     -DGGML_CPU=ON \
-                    -DGGML_VULKAN=OFF \
-                    -DGGML_LTO=ON
+                    -DGGML_VULKAN=ON
                   cmake --build build --config Release -j $(nproc)
 
             - name: Collect build artifacts
@@ -131,12 +151,12 @@ jobs:
               run: |
                   set -e
                   mkdir -p artifact/build
-                  cp build/bin/*. so artifact/build/ || true
+                  cp build/bin/*.so artifact/build/ || true
 
             - name: Upload build artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: build-${{ matrix.name }}-${{ github.run_id }}
+                  name: libllama-linux-${{ matrix.name }}-${{ github.run_id }}
                   path: artifact/build
 
     build-freebsd:
@@ -166,18 +186,23 @@ jobs:
                         -DBUILD_SHARED_LIBS=ON \
                         -DLLAMA_CURL=OFF \
                         -DLLAMA_STANDALONE=OFF \
+                        -DGGML_NATIVE=OFF \
+                        -DGGML_LTO=ON \
                         -DGGML_BACKEND_DL=ON \
-                        -DGGML_BACKEND_DIR='backends' \
                         -DGGML_CPU_ALL_VARIANTS=ON \
                         -DGGML_CPU=ON \
-                        -DGGML_VULKAN=ON \
-                        -DGGML_LTO=ON
+                        -DGGML_VULKAN=ON
                       cmake --build build --config Release -j $(sysctl -n hw.ncpu)
-                      mkdir -p artifact/build
-                      cp build/bin/*.so artifact/build/ || true
+
+            - name: Collect build artifacts
+              id: collect_artifacts
+              run: |
+                  set -e
+                  mkdir -p artifact/build
+                  cp build/bin/*.so artifact/build/ || true
 
             - name: Upload build artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: build-freebsd-x86_64-${{ github. run_id }}
+                  name: libllama-freebsd-x86_64-${{ github.run_id }}
                   path: artifact/build
